@@ -30,9 +30,10 @@ correspondiente en `<PackageReleaseNotes>`. El criterio es simple: si el
 README cambió para describir algo que un consumidor puede usar, el paquete
 tiene que poder publicarse con esa descripción ya adentro.
 
-No hay automatización de por medio — el repo no tiene CI (ver `CLAUDE.md`) —
-es una convención de equipo: el mismo cambio que toca el README deja el
-`.csproj` listo para `dotnet pack` sin pasos manuales adicionales.
+No hay automatización de por medio —el CI compila y ejecuta los tests, pero no
+compara el README con `<Version>`— es una convención de equipo: el mismo cambio que
+toca el README deja el `.csproj` listo para `dotnet pack` sin pasos manuales
+adicionales.
 
 ## Alternativas consideradas
 

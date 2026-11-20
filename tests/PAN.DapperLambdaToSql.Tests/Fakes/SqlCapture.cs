@@ -27,11 +27,11 @@ internal static class SqlCapture
         => await TryUpdateAsync(connection, entity)
            ?? throw new InvalidOperationException("No se capturó SQL: la consulta nunca se ejecutó.");
 
-    public static async Task<string> ExistAsync<T>(DbConnection connection, Expression<Func<T, bool>> predicate)
+    public static async Task<string> ExistsAsync<T>(DbConnection connection, Expression<Func<T, bool>> predicate)
     {
         try
         {
-            await connection.ExistAsync(predicate);
+            await connection.ExistsAsync(predicate);
         }
         catch (SqlCapturedException ex)
         {
@@ -46,20 +46,6 @@ internal static class SqlCapture
         try
         {
             await connection.QueryAsync(predicate);
-        }
-        catch (SqlCapturedException ex)
-        {
-            return ex.Sql;
-        }
-
-        throw new InvalidOperationException("No se capturó SQL: la consulta nunca se ejecutó.");
-    }
-
-    public static async Task<string> QueryPagedAsync<T>(DbConnection connection, Expression<Func<T, bool>> predicate)
-    {
-        try
-        {
-            await connection.QueryPagedAsync(predicate, page: 1, pageSize: 10);
         }
         catch (SqlCapturedException ex)
         {

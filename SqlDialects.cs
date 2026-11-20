@@ -37,6 +37,15 @@ public static class SqlDialects
     public static readonly ISqlDialect SqlServer = new SqlServerDialect();
     public static readonly ISqlDialect MySql = new MySqlDialect();
     public static readonly ISqlDialect None = new NoDelimiterDialect();
+
+    /// <summary>
+    /// Fuerza un dialecto concreto para todas las conexiones. Si queda en <c>null</c>
+    /// -lo normal- el dialecto se detecta a partir del tipo de conexión. Útil para
+    /// proveedores que envuelven la conexión real y por tanto no se reconocen por su
+    /// nombre de tipo. Es una configuración global: en apps multi-motor dejarla en
+    /// <c>null</c>.
+    /// </summary>
+    public static ISqlDialect? Forced { get; set; }
 }
 
 internal static class DelimiterWriter

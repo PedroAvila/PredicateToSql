@@ -56,4 +56,17 @@ public class KeyResolutionTests
         // User tiene GymId y RoleId; ninguna debe desplazar a Id.
         Assert.Equal("Id", ResolveKey<User>().Name);
     }
+
+    [Fact]
+    public void GetKeyProperty_WhenThereAreMultipleKeys_ShouldThrowNotSupported()
+    {
+        var type = typeof(CompositeKey);
+
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            DapperHelper.GetKeyProperty(type, type.GetProperties(BindingFlags.Public | BindingFlags.Instance)));
+
+        Assert.Contains("CompositeKey", exception.Message);
+        Assert.Contains("TenantId", exception.Message);
+        Assert.Contains("UserId", exception.Message);
+    }
 }

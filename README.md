@@ -1,16 +1,16 @@
 # PAN.DapperLambdaToSql
 
-**PAN.DapperLambdaToSql** es una librería ligera que extiende Dapper y Dapper.Contrib, permitiendo realizar operaciones genéricas como `UPDATE` y `EXIST` utilizando expresiones lambda (`Expression<Func<T, bool>>`), al estilo de Entity Framework.
+**PAN.DapperLambdaToSql** es una librería ligera que extiende Dapper y Dapper.Contrib, permitiendo realizar operaciones genéricas como `UPDATE`, verificar existencia y consultar filas usando expresiones lambda (`Expression<Func<T, bool>>`), al estilo de Entity Framework.
 > ⚠️ **Importante:** Esta librería está diseñada para usarse **exclusivamente** con **Dapper** y **Dapper.Contrib**.
 > **Nota:** Esta librería no es compatible con Entity Framework ni con Entity Framework Core. Está enfocada en simplificar el uso de Dapper para operaciones comunes sin necesidad de escribir SQL manualmente.
 
 ## ✨ Características
 
 - ✅ Actualización de entidades genéricas con `UpdateAsync`
-- ✅ Verificación de existencia con `ExistAsync`
+- ✅ Verificación de existencia con `ExistsAsync`
 - ✅ Consulta de filas que cumplen un predicado con `QueryAsync`
-- ✅ Predicados con `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `Contains` (`LIKE`) y agrupamiento con paréntesis
-- ✅ Orden y paginado genéricos en memoria con `OrderByProperty` / `ToPagedResult`, con soporte de desempate por varias claves (`OrderByProperties`) y `QueryPagedAsync` como atajo
+- ✅ Predicados con `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `!`, `Contains` (`LIKE`) y agrupamiento con paréntesis
+- ✅ Cancelación opcional con `CancellationToken` en los tres métodos
 - ✅ Compatible con `Dapper` y `Dapper.Contrib`: respeta `[Table]`, `[Key]`, `[ExplicitKey]`, `[Write(false)]` y `[Computed]`
 - ✅ Varias convenciones de clave primaria: `Id`, `ID` y `Clase+Id`
 - ✅ Funciona con **SQL Server** y **MySQL / MariaDB**, delimitando los identificadores según el motor
@@ -19,7 +19,7 @@
 ## 💡 Instalación
 
 ```
-dotnet add package PAN.DapperLambdaToSql
+dotnet add package PAN.DapperLambdaSQL
 ```
 
 
@@ -66,7 +66,7 @@ Delimitar los identificadores permite usar columnas cuyo nombre es **palabra res
 Si usas un proveedor que envuelve la conexión real (perfilado, tracing) y por eso no se reconoce, puedes forzar el dialecto:
 
 ```csharp
-DapperHelper.Dialect = SqlDialects.SqlServer;   // o SqlDialects.MySql
+SqlDialects.Forced = SqlDialects.SqlServer;   // o SqlDialects.MySql
 ```
 
 > ⚠️ Es una configuración **global**. Si tu aplicación habla con dos motores a la vez, déjala en `null` y confía en la detección automática.
@@ -126,7 +126,8 @@ UPDATE Productos SET Nombre = @Nombre WHERE Sku = @Sku
 Este método de extensión permite actualizar dinámicamente cualquier entidad genérica sin escribir SQL manualmente.
 Solo actualizará las propiedades `no nulas` que no sean la clave primaria, por lo que es ideal para escenarios de actualización parcial (PATCH).
 
-- ✅ Ventaja: No se sobreescriben columnas con `null`, `0` o `DateTime.MinValue` si no las envías.
+- ✅ Ventaja: no se sobreescriben las columnas que dejas en `null`.
+- ⚠️ Solo se omite `null`: los tipos no anulables (`int`, `bool`, `DateTime`) siempre se escriben, con su valor por defecto incluido. Si necesitas excluir una columna, declárala anulable o márcala con `[Write(false)]`.
 
 ### Ejemplo de entidad:
 
@@ -182,25 +183,25 @@ public async Task<bool> UpdateGymAsync(Gym gym)
 - Funciona con cualquier entidad cuya clave primaria siga alguna de las [convenciones soportadas](#-clave-primaria-nombres-soportados).
 
 
-### 📌 Verificar existencia con ExistAsync
+### 📌 Verificar existencia con ExistsAsync
 Este método permite consultar si existe una entidad que cumpla con una condición específica, usando expresiones lambda al estilo de Entity Framework.
 
 ```
 // En tu servicio o repositorio genérico
-public async Task<bool> ExistAsync(Expression<Func<T, bool>> predicate)
+public async Task<bool> ExistsAsync(Expression<Func<T, bool>> predicate)
 {
-    return await _context.ExistAsync(predicate);
+    return await _context.ExistsAsync(predicate);
 }
 ```
 
 Ejemplo:
 ```
-bool existe = await _context.ExistAsync<User>(x => x.Email == "test@example.com");
+bool existe = await _context.ExistsAsync<User>(x => x.Email == "test@example.com");
 ```
 
 ### 📌 Consultar filas con QueryAsync
 
-Este método devuelve las filas que cumplen el predicado, al estilo de un `Where()` de Entity Framework — a diferencia de `ExistAsync`, que solo devuelve `bool`.
+Este método devuelve las filas que cumplen el predicado, al estilo de un `Where()` de Entity Framework — a diferencia de `ExistsAsync`, que solo devuelve `bool`.
 
 ```csharp
 // En tu servicio o repositorio genérico
@@ -215,18 +216,32 @@ Ejemplo:
 IEnumerable<User> usuarios = await _context.QueryAsync<User>(u => u.RoleId == 2 && u.Name.Contains("Pedro"));
 ```
 
+### ⏱️ Cancelación
+
+`UpdateAsync`, `ExistsAsync` y `QueryAsync` aceptan un `CancellationToken` opcional que se propaga a Dapper:
+
+```csharp
+using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+IEnumerable<User> usuarios = await _context.QueryAsync<User>(u => u.RoleId == 2, cts.Token);
+```
+
 ### 🔎 Operadores soportados en los predicados
 
-Tanto `ExistAsync` como `QueryAsync` reciben un `Expression<Func<T, bool>>` y lo traducen a SQL. Están soportados:
+Tanto `ExistsAsync` como `QueryAsync` reciben un `Expression<Func<T, bool>>` y lo traducen a SQL. Están soportados:
 
 | Expresión C# | SQL generado |
 |---|---|
 | `==` | `=` |
+| `== null` / `!= null` | `IS NULL` / `IS NOT NULL` |
 | `!=` | `<>` |
 | `<`, `<=`, `>`, `>=` | `<`, `<=`, `>`, `>=` |
 | `&&` | `AND` |
 | `\|\|` | `OR` |
-| `x.Prop.Contains("valor")` | `LIKE '%valor%'` |
+| `!expr` | `NOT (...)` |
+| `x.Prop` (si `Prop` es `bool`) | `Prop = @param` (`true`) |
+| `x.Prop.Contains("valor")` | `LIKE '%valor%' ESCAPE '!'` |
+
+El lado derecho de una comparación se evalúa como valor: admite constantes, variables capturadas, métodos y aritmética (`x.Fecha > DateTime.Now.AddDays(-1)`, `x.Id == baseId + 1`). Si referencia la entidad (`x.Name == x.Key`) lanza `NotSupportedException`.
 
 Se pueden combinar libremente, incluso con agrupamiento entre paréntesis — se agregan los paréntesis mínimos necesarios para que el SQL se lea igual que la expresión de C#:
 
@@ -235,48 +250,13 @@ await _context.QueryAsync<User>(u => u.Name == "Pedro" && (u.RoleId == 2 || u.Ro
 // WHERE Name = @param0 AND (RoleId = @param1 OR RoleId = @param2)
 ```
 
-> ⚠️ `Contains` no escapa `%` ni `_` en el valor; si tu dato los trae, se interpretan como comodines de `LIKE`. Cualquier otro método (`StartsWith`, `Contains` sobre una lista, etc.) lanza `NotSupportedException`.
+> `Contains` escapa `%`, `_` y el propio carácter de escape `!` antes de parametrizar, y agrega `ESCAPE '!'`, así que esos caracteres se buscan literalmente en vez de funcionar como comodines. Cualquier otro método (`StartsWith`, `Contains` sobre una lista, etc.) lanza `NotSupportedException`.
 
-### 📄 Orden y paginado en memoria con PagingExtensions
+> ⚠️ El lado izquierdo de una comparación debe ser una propiedad simple de la entidad. Se lanza `NotSupportedException` en vez de generar SQL inválido cuando usás un valor invertido (`"Pedro" == x.Name`), una comparación columna-columna (`x.Name == x.Key`), una ruta anidada (`x.Role.Name`) o una propiedad calculada en el cliente (`x.Name.Length`).
 
-Dapper no tiene una capa `IQueryable` diferida como Entity Framework, así que no hay forma de traducir un "ordená por este nombre de columna" hasta el SQL sin reimplementar esa capa. `OrderByProperty` y `ToPagedResult` resuelven eso **en memoria**, sobre una secuencia ya traída (por ejemplo, el resultado de `QueryAsync`):
+## 📄 Licencia
 
-```csharp
-var usuarios = await _context.QueryAsync<User>(u => u.GymId == 1);
-
-PagedResult<User> pagina = usuarios.ToPagedResult(page: 2, pageSize: 20, orderBy: "Name");
-
-// pagina.Items, pagina.Page, pagina.PageSize, pagina.TotalCount, pagina.TotalPages
-```
-
-`orderBy` recibe el nombre de una propiedad pública de `T` (no distingue mayúsculas/minúsculas); si no existe, lanza `ArgumentException`. No soporta rutas anidadas (`"Cliente.Nombre"`).
-
-#### Desempate con varias claves de orden
-
-Para ordenar por más de una propiedad, `OrderByProperties` y el overload correspondiente de `ToPagedResult` reciben `params (string Property, bool Descending)[]`:
-
-```csharp
-var usuarios = await _context.QueryAsync<User>(u => u.GymId == 1);
-
-// Ordena por RoleId y, dentro de cada rol, por Name
-PagedResult<User> pagina = usuarios.ToPagedResult(page: 1, pageSize: 20,
-    (nameof(User.RoleId), false), (nameof(User.Name), false));
-```
-
-La primera clave se aplica con `OrderBy`/`OrderByDescending` y el resto encadena `ThenBy`/`ThenByDescending`, así que cada clave puede tener su propio sentido (ascendente o descendente). `OrderByProperties` exige al menos una clave (lanza `ArgumentException` con un array vacío); el overload de `ToPagedResult` con `sortKeys`, en cambio, trata un array vacío como "sin orden" y preserva el orden de origen.
-
-#### `QueryPagedAsync`: `QueryAsync` + `ToPagedResult` en una sola llamada
-
-Para no repetir esos dos pasos en cada repositorio:
-
-```csharp
-PagedResult<User> pagina = await _context.QueryPagedAsync<User>(
-    u => u.GymId == 1,
-    page: 1, pageSize: 20,
-    (nameof(User.RoleId), false), (nameof(User.Name), false));
-```
-
-Es pura conveniencia: internamente ejecuta `QueryAsync<T>(predicate)` y aplica `ToPagedResult` sobre el resultado, en memoria.
+MIT — ver [LICENSE](LICENSE).
 
 
 

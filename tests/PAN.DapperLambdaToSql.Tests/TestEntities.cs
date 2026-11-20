@@ -108,3 +108,41 @@ public class QualifiedBranch
     public int Id { get; set; }
     public string? Name { get; set; }
 }
+
+/// <summary>Dos propiedades marcadas como clave: las claves compuestas no están soportadas.</summary>
+public class CompositeKey
+{
+    [Key]
+    public int TenantId { get; set; }
+
+    [Key]
+    public int UserId { get; set; }
+
+    public string? Name { get; set; }
+}
+
+/// <summary>Un indexer no es una columna: UpdateAsync debe ignorarlo.</summary>
+public class Widget
+{
+    public int Id { get; set; }
+    public string? Name { get; set; }
+
+    public string this[int index] => index.ToString();
+}
+
+/// <summary>Clave anulable, para comprobar que no se genera un WHERE con NULL.</summary>
+public class NullableKey
+{
+    public int? Id { get; set; }
+    public string? Name { get; set; }
+}
+
+/// <summary>
+/// [Table] de otra librería (simulado): se resuelve por reflexión, sin dynamic.
+/// </summary>
+[OtraLibreria.Table("TablaExterna")]
+public class ExternalTableEntity
+{
+    public int Id { get; set; }
+    public string? Name { get; set; }
+}

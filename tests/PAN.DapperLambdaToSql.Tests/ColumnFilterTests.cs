@@ -48,6 +48,10 @@ public class TableNameTests
         => Assert.Equal("Gimnasios", DapperHelper.GetTableName(typeof(BrandedGym)));
 
     [Fact]
+    public void GetTableName_WhenTableAttributeComesFromAnotherLibrary_ShouldUseIt()
+        => Assert.Equal("TablaExterna", DapperHelper.GetTableName(typeof(ExternalTableEntity)));
+
+    [Fact]
     public void GetTableName_WhenCalledTwice_ShouldReturnTheCachedValue()
     {
         var first = DapperHelper.GetTableName(typeof(Role));

@@ -8,9 +8,10 @@ namespace PAN.DapperLambdaToSql.Tests.Fakes;
 /// Se lanza en cuanto el comando va a ejecutarse, ya con el <c>CommandText</c> definitivo.
 /// Evita tener que simular un <see cref="DbDataReader"/> completo solo para leer el SQL.
 /// </summary>
-public class SqlCapturedException(string sql) : Exception("SQL capturado")
+public class SqlCapturedException(string sql, CancellationToken? cancellationToken = null) : Exception("SQL capturado")
 {
     public string Sql { get; } = sql;
+    public CancellationToken? CancellationToken { get; } = cancellationToken;
 }
 
 public abstract class CapturingConnection : DbConnection
@@ -57,6 +58,18 @@ public sealed class CapturingCommand : DbCommand
     public override int ExecuteNonQuery() => throw new SqlCapturedException(CommandText);
     public override object? ExecuteScalar() => throw new SqlCapturedException(CommandText);
     protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new SqlCapturedException(CommandText);
+
+    // Los overloads async conservan el token para que los tests verifiquen que la
+    // librería lo propaga hasta Dapper.
+    public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
+        => throw new SqlCapturedException(CommandText, cancellationToken);
+
+    public override Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken)
+        => throw new SqlCapturedException(CommandText, cancellationToken);
+
+    protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
+        CommandBehavior behavior, CancellationToken cancellationToken)
+        => throw new SqlCapturedException(CommandText, cancellationToken);
 }
 
 public sealed class CapturingParameter : DbParameter

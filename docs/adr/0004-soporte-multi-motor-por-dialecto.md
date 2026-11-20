@@ -39,7 +39,7 @@ un `SqlConnection`, y `MySql.Data` y `MySqlConnector` exponen ambas un `MySqlCon
 Una librería `netstandard2.0` no puede depender de esos paquetes, así que comparar nombres
 es la única vía sin acoplarse a ninguno.
 
-`DapperHelper.Dialect` permite forzar un dialecto y gana sobre la detección automática. Está
+`SqlDialects.Forced` permite forzar un dialecto y gana sobre la detección automática. Está
 pensado para proveedores que envuelven la conexión real —perfilado, tracing— y por tanto no
 se reconocen por su nombre de tipo.
 
@@ -83,7 +83,7 @@ delimitados. En MySQL esto **no** es una regresión —los backticks son válido
 incluso con `ANSI_QUOTES` activo, y MySQL no altera mayúsculas ni con comillas ni sin
 ellas— y además corrige las columnas con nombre reservado, que hasta ahora fallaban.
 
-Se verificó capturando el `CommandText` real de `UpdateAsync` y `ExistAsync` contra
+Se verificó capturando el `CommandText` real de `UpdateAsync` y `ExistsAsync` contra
 conexiones simuladas de cada tipo:
 
 ```sql
@@ -91,8 +91,8 @@ conexiones simuladas de cada tipo:
 UPDATE `Roles` SET `Code` = @Code, `GymId` = @GymId, `Name` = @Name, `Key` = @Key, `IsSystemRole` = @IsSystemRole WHERE `Id` = @Id
 -- SQL Server
 UPDATE [Roles] SET [Code] = @Code, [GymId] = @GymId, [Name] = @Name, [Key] = @Key, [IsSystemRole] = @IsSystemRole WHERE [Id] = @Id
--- ExistAsync
-SELECT COUNT(*) FROM `Users` WHERE `Name` = @param0
+-- ExistsAsync
+SELECT CASE WHEN EXISTS (SELECT 1 FROM `Users` WHERE `Name` = @param0) THEN 1 ELSE 0 END
 ```
 
 Las llaves foráneas siguen en el `SET`, la resolución de la clave primaria no cambió y las
@@ -110,9 +110,10 @@ Detalles del delimitado que conviene conocer:
 - El delimitador de cierre dentro de un nombre se escapa duplicándolo: `Weird]Name` produce
   `[Weird]]Name]`.
 
-`DapperHelper.Dialect` es estado estático global. Una aplicación que hable con dos motores a
+`SqlDialects.Forced` es estado estático global. Una aplicación que hable con dos motores a
 la vez debe dejarlo en `null` y confiar en la detección por conexión; fijarlo forzaría el
 mismo dialecto para ambos.
 
-El prefijo `@` de parámetros se mantiene para los dos motores, y `COUNT(*)` se sigue leyendo
-como `int` aunque MySQL lo devuelva como entero de 64 bits: Dapper hace la conversión.
+El prefijo `@` de parámetros se mantiene para los dos motores. `ExistsAsync` devuelve
+`1`/`0` mediante `CASE WHEN EXISTS (...) THEN 1 ELSE 0 END`, que Dapper lee como `int`
+en ambos.

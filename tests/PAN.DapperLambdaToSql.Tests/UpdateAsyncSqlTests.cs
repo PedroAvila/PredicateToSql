@@ -162,6 +162,27 @@ public abstract class UpdateAsyncSqlTests
 
         Assert.Contains("Detail", exception.Message);
     }
+
+    [Fact]
+    public async Task UpdateAsync_WhenEntityHasAnIndexer_ShouldIgnoreIt()
+    {
+        using var connection = CreateConnection();
+
+        var sql = await SqlCapture.UpdateAsync(connection, new Widget { Id = 1, Name = "Central" });
+
+        Assert.Equal($"UPDATE {D("Widgets")} SET {D("Name")} = @Name WHERE {D("Id")} = @Id", sql);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenKeyIsNull_ShouldThrowInsteadOfUpdatingNothing()
+    {
+        using var connection = CreateConnection();
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(
+            () => connection.UpdateAsync(new NullableKey { Name = "sin clave" }));
+
+        Assert.Contains("Id", exception.Message);
+    }
 }
 
 public class UpdateAsyncMySqlTests : UpdateAsyncSqlTests

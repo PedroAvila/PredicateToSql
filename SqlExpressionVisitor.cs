@@ -1,50 +1,92 @@
 ﻿using Dapper;
 using System.Linq.Expressions;
+using System.Text;
 
 namespace PAN.DapperLambdaToSql;
 
-public class SqlExpressionVisitor : ExpressionVisitor
+/// <summary>
+/// Traduce un predicado booleano a un fragmento WHERE y sus parámetros. El lado
+/// izquierdo de cada comparación debe ser una propiedad simple de la entidad (una
+/// columna); el derecho se evalúa como valor. Ver docs/adr/0005.
+/// </summary>
+internal sealed class SqlExpressionVisitor
 {
     private readonly ISqlDialect _dialect;
+    private readonly ParameterExpression _parameter;
+    private readonly StringBuilder _sql = new();
+    private int _nextParameter;
 
-    public string Sql { get; private set; }
-    public DynamicParameters Parameters { get; private set; }
+    public string Sql => _sql.ToString();
+    public DynamicParameters Parameters { get; } = new();
 
-    public SqlExpressionVisitor() : this(SqlDialects.None)
-    {
-    }
-
-    public SqlExpressionVisitor(ISqlDialect dialect)
+    public SqlExpressionVisitor(ISqlDialect dialect, ParameterExpression parameter)
     {
         _dialect = dialect ?? SqlDialects.None;
-        Sql = "";
-        Parameters = new DynamicParameters();
+        _parameter = parameter ?? throw new ArgumentNullException(nameof(parameter));
     }
 
-    protected override Expression VisitBinary(BinaryExpression node)
+    public void VisitPredicate(Expression expression)
     {
-        switch (node.NodeType)
+        switch (expression)
         {
-            case ExpressionType.AndAlso:
-                VisitLogicalBinary(node, " AND ");
-                break;
-            case ExpressionType.OrElse:
-                VisitLogicalBinary(node, " OR ");
-                break;
-            case ExpressionType.Equal:
-            case ExpressionType.NotEqual:
-            case ExpressionType.LessThan:
-            case ExpressionType.LessThanOrEqual:
-            case ExpressionType.GreaterThan:
-            case ExpressionType.GreaterThanOrEqual:
-                VisitComparisonBinary(node, ComparisonOperatorFor(node.NodeType));
-                break;
-            default:
-                throw new NotSupportedException($"Only equality comparison is supported. Unsupported operator: '{node.NodeType}'.");
-        }
+            case LambdaExpression lambda:
+                VisitPredicate(lambda.Body);
+                return;
 
-        return node;
+            case UnaryExpression { NodeType: ExpressionType.Not } not:
+                _sql.Append("NOT (");
+                VisitPredicate(not.Operand);
+                _sql.Append(')');
+                return;
+
+            case UnaryExpression { NodeType: ExpressionType.Convert } convert:
+                VisitPredicate(convert.Operand);
+                return;
+
+            case UnaryExpression { NodeType: ExpressionType.ConvertChecked } convertChecked:
+                VisitPredicate(convertChecked.Operand);
+                return;
+
+            case BinaryExpression { NodeType: ExpressionType.AndAlso } andAlso:
+                VisitLogicalBinary(andAlso, " AND ");
+                return;
+
+            case BinaryExpression { NodeType: ExpressionType.OrElse } orElse:
+                VisitLogicalBinary(orElse, " OR ");
+                return;
+
+            case BinaryExpression comparison when IsComparison(comparison.NodeType):
+                VisitComparisonBinary(comparison, ComparisonOperatorFor(comparison.NodeType));
+                return;
+
+            case MethodCallExpression call:
+                VisitContains(call);
+                return;
+
+            case MemberExpression member when member.Type == typeof(bool):
+                VisitBooleanMember(member);
+                return;
+
+            // u => true / u => false: un predicado constante no tiene columna, pero
+            // tampoco puede quedar como WHERE @param -SQL Server lo rechaza-.
+            case ConstantExpression { Value: bool value }:
+                _sql.Append(value ? "1 = 1" : "1 = 0");
+                return;
+
+            default:
+                throw new NotSupportedException(
+                    $"El predicado contiene una expresión no soportada ('{expression.NodeType}'). " +
+                    "Solo se admiten comparaciones, &&, ||, !, bool sueltos y string.Contains(...).");
+        }
     }
+
+    private static bool IsComparison(ExpressionType nodeType) => nodeType is
+        ExpressionType.Equal or
+        ExpressionType.NotEqual or
+        ExpressionType.LessThan or
+        ExpressionType.LessThanOrEqual or
+        ExpressionType.GreaterThan or
+        ExpressionType.GreaterThanOrEqual;
 
     private static string ComparisonOperatorFor(ExpressionType nodeType) => nodeType switch
     {
@@ -54,32 +96,43 @@ public class SqlExpressionVisitor : ExpressionVisitor
         ExpressionType.LessThanOrEqual => " <= ",
         ExpressionType.GreaterThan => " > ",
         ExpressionType.GreaterThanOrEqual => " >= ",
-        _ => throw new NotSupportedException($"Unsupported comparison operator: '{nodeType}'."),
+        _ => throw new NotSupportedException($"Operador de comparación no soportado: '{nodeType}'."),
     };
 
     private void VisitComparisonBinary(BinaryExpression node, string sqlOperator)
     {
-        Visit(node.Left);
-        Sql += sqlOperator;
-        VisitValueOperand(node.Right);
-    }
+        VisitColumn(node.Left);
 
-    private void VisitValueOperand(Expression operand)
-    {
-        if (operand.NodeType == ExpressionType.MemberAccess)
+        var value = ResolveValue(node.Right);
+
+        // En SQL, "= NULL" nunca es verdadero: la comparación con null necesita
+        // IS NULL / IS NOT NULL para no devolver cero filas en silencio.
+        if (value is null)
         {
-            VisitMemberAccess((MemberExpression)operand);
+            if (node.NodeType == ExpressionType.Equal)
+            {
+                _sql.Append(" IS NULL");
+                return;
+            }
+
+            if (node.NodeType == ExpressionType.NotEqual)
+            {
+                _sql.Append(" IS NOT NULL");
+                return;
+            }
+
+            throw new NotSupportedException(
+                $"No se puede comparar con null usando '{sqlOperator.Trim()}'. Solo == y != admiten null.");
         }
-        else
-        {
-            Visit(operand);
-        }
+
+        _sql.Append(sqlOperator);
+        AddParameter(value);
     }
 
     private void VisitLogicalBinary(BinaryExpression node, string sqlOperator)
     {
         VisitLogicalOperand(node.Left, node.NodeType);
-        Sql += sqlOperator;
+        _sql.Append(sqlOperator);
         VisitLogicalOperand(node.Right, node.NodeType);
     }
 
@@ -92,59 +145,137 @@ public class SqlExpressionVisitor : ExpressionVisitor
 
         if (needsParens)
         {
-            Sql += "(";
-            Visit(operand);
-            Sql += ")";
+            _sql.Append('(');
+            VisitPredicate(operand);
+            _sql.Append(')');
         }
         else
         {
-            Visit(operand);
+            VisitPredicate(operand);
         }
     }
 
-    protected override Expression VisitConstant(ConstantExpression node)
+    private void VisitBooleanMember(MemberExpression member)
     {
-        var parameterName = $"@param{Parameters.ParameterNames.Count()}";
-        Parameters.Add(parameterName, node.Value);
-
-        Sql += parameterName;
-
-        return node;
-    }
-
-    private void VisitMemberAccess(MemberExpression node)
-    {
-        VisitConstant(Expression.Constant(ResolveValue(node)));
-    }
-
-    private static object? ResolveValue(Expression node)
-        => Expression.Lambda(node).Compile().DynamicInvoke();
-
-    protected override Expression VisitMember(MemberExpression node)
-    {
-        // Aquí el miembro siempre representa una columna: los valores del lado derecho
-        // los desvía VisitMemberAccess antes de llegar a este punto.
-        Sql += _dialect.Delimit(node.Member.Name);
-        return node;
-    }
-
-    protected override Expression VisitMethodCall(MethodCallExpression node)
-    {
-        if (IsStringContains(node))
+        // Un bool suelto -u => u.IsActive- no es SQL válido en SQL Server: se
+        // traduce a "columna = @param" con true, igual que haría EF.
+        if (IsColumn(member))
         {
-            Visit(node.Object!); // emite la columna, p. ej. u.Name -> Name
-            Sql += " LIKE ";
+            VisitColumn(member);
+            _sql.Append(" = ");
+            AddParameter(true);
+            return;
+        }
 
-            var rawValue = ResolveValue(node.Arguments[0]);
-            var pattern = rawValue is null ? null : $"%{rawValue}%";
-            VisitConstant(Expression.Constant(pattern));
-
-            return node;
+        // Un bool capturado por el closure no depende de la entidad: se evalúa.
+        if (!ReferencesParameter(member))
+        {
+            var value = (bool)ResolveValue(member)!;
+            _sql.Append(value ? "1 = 1" : "1 = 0");
+            return;
         }
 
         throw new NotSupportedException(
-            $"El método '{node.Method.DeclaringType?.Name}.{node.Method.Name}' no está soportado. " +
-            "Solo string.Contains(...) se traduce a LIKE.");
+            "Solo se pueden usar propiedades simples de la entidad como predicado booleano. " +
+            "No están soportadas las rutas anidadas.");
+    }
+
+    private void VisitContains(MethodCallExpression node)
+    {
+        if (!IsStringContains(node))
+        {
+            throw new NotSupportedException(
+                $"El método '{node.Method.DeclaringType?.Name}.{node.Method.Name}' no está soportado. " +
+                "Solo string.Contains(...) se traduce a LIKE.");
+        }
+
+        // El receptor debe ser una columna: "abc".Contains(...) no es SQL válido.
+        VisitColumn(node.Object!);
+
+        _sql.Append(" LIKE ");
+
+        var rawValue = ResolveValue(node.Arguments[0]);
+        AddParameter(rawValue is null ? null : ToLikePattern(rawValue));
+
+        // '!' como carácter de escape es válido tal cual en SQL Server y MySQL, y
+        // evita que %/_ del valor se interpreten como comodines.
+        _sql.Append(" ESCAPE '!'");
+    }
+
+    /// <summary>
+    /// Escapa los comodines de LIKE y envuelve el valor en <c>%...%</c>. El carácter
+    /// de escape es <c>!</c> para no depender del backslash -que MySQL trata distinto
+    /// según el modo-.
+    /// </summary>
+    private static string ToLikePattern(object value)
+    {
+        var text = value.ToString() ?? string.Empty;
+
+        var escaped = text
+            .Replace("!", "!!")
+            .Replace("%", "!%")
+            .Replace("_", "!_");
+
+        return $"%{escaped}%";
+    }
+
+    private void VisitColumn(Expression expression)
+    {
+        var stripped = StripConvert(expression);
+
+        if (stripped is not MemberExpression { Expression: ParameterExpression parameter } member
+            || parameter != _parameter)
+        {
+            throw new NotSupportedException(
+                "Solo se pueden usar propiedades simples de la entidad como columna. " +
+                "No están soportados los valores constantes invertidos, las rutas anidadas " +
+                "ni las propiedades calculadas en el cliente.");
+        }
+
+        _sql.Append(_dialect.Delimit(member.Member.Name));
+    }
+
+    private bool IsColumn(Expression expression)
+        => StripConvert(expression) is MemberExpression { Expression: ParameterExpression parameter }
+            && parameter == _parameter;
+
+    private static Expression StripConvert(Expression expression)
+    {
+        while (expression is UnaryExpression { NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked } unary)
+            expression = unary.Operand;
+
+        return expression;
+    }
+
+    private object? ResolveValue(Expression expression)
+    {
+        if (ReferencesParameter(expression))
+        {
+            throw new NotSupportedException(
+                "No se soportan comparaciones entre dos columnas: el lado derecho debe ser un valor " +
+                "(constante, variable capturada o una expresión que no dependa de la entidad).");
+        }
+
+        // Compilación tipada (evita DynamicInvoke). El árbol puede traer métodos,
+        // aritmética y propiedades: se evalúa entero como cualquier expresión C#.
+        var value = Expression.Lambda<Func<object?>>(
+            Expression.Convert(expression, typeof(object))).Compile();
+
+        return value();
+    }
+
+    private bool ReferencesParameter(Expression expression)
+    {
+        var finder = new ParameterFinder(_parameter);
+        finder.Visit(expression);
+        return finder.Found;
+    }
+
+    private void AddParameter(object? value)
+    {
+        var parameterName = $"@param{_nextParameter++}";
+        Parameters.Add(parameterName, value);
+        _sql.Append(parameterName);
     }
 
     private static bool IsStringContains(MethodCallExpression node)
@@ -152,4 +283,15 @@ public class SqlExpressionVisitor : ExpressionVisitor
            && node.Method.Name == nameof(string.Contains)
            && node.Object != null
            && node.Arguments.Count == 1;
+
+    private sealed class ParameterFinder(ParameterExpression parameter) : ExpressionVisitor
+    {
+        public bool Found { get; private set; }
+
+        protected override Expression VisitParameter(ParameterExpression node)
+        {
+            if (node == parameter) Found = true;
+            return node;
+        }
+    }
 }

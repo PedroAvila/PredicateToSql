@@ -4,7 +4,7 @@ namespace PAN.DapperLambdaToSql.Tests;
 
 public class DialectDetectionTests : IDisposable
 {
-    public void Dispose() => DapperHelper.Dialect = null;
+    public void Dispose() => SqlDialects.Forced = null;
 
     [Fact]
     public void GetDialect_WhenConnectionIsSqlConnection_ShouldReturnSqlServer()
@@ -36,7 +36,7 @@ public class DialectDetectionTests : IDisposable
     [Fact]
     public void GetDialect_WhenDialectIsForced_ShouldWinOverDetection()
     {
-        DapperHelper.Dialect = SqlDialects.SqlServer;
+        SqlDialects.Forced = SqlDialects.SqlServer;
 
         using var connection = new MySqlConnection();
         Assert.Same(SqlDialects.SqlServer, DapperHelper.GetDialect(connection));
@@ -45,7 +45,7 @@ public class DialectDetectionTests : IDisposable
     [Fact]
     public async Task UpdateAsync_WhenDialectIsForced_ShouldUseItInsteadOfTheConnection()
     {
-        DapperHelper.Dialect = SqlDialects.SqlServer;
+        SqlDialects.Forced = SqlDialects.SqlServer;
 
         using var connection = new MySqlConnection();
         var sql = await SqlCapture.UpdateAsync(connection, new Gym { Id = 1, Name = "Central" });

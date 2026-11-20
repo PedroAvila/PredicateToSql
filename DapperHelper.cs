@@ -7,7 +7,7 @@ using System.Reflection;
 
 namespace PAN.DapperLambdaToSql;
 
-public class DapperHelper
+internal static class DapperHelper
 {
     // ConcurrentDictionary y no Dictionary: esta caché es estática y se escribe desde
     // cualquier hilo que resuelva una entidad por primera vez. Con Dictionary, dos
@@ -24,25 +24,36 @@ public class DapperHelper
 
     private static string ResolveTableName(Type type)
     {
-        string name;
-
-        // Aquí se implementa el resto de la lógica del método GetTableName
+        // Se acepta [Table] de Dapper.Contrib y, por compatibilidad, cualquier otro
+        // atributo llamado TableAttribute (por ejemplo el de DataAnnotations). El
+        // nombre se lee por reflexión para no depender de dynamic ni de un assembly
+        // que esta librería no referencia.
         var tableAttrName =
-                type.GetCustomAttribute<TableAttribute>(false)?.Name
-                ?? (type.GetCustomAttributes(false).FirstOrDefault(attr => attr.GetType().Name == "TableAttribute") as dynamic)?.Name;
+            type.GetCustomAttribute<TableAttribute>(false)?.Name
+            ?? ResolveForeignTableAttributeName(type);
 
         if (tableAttrName != null)
         {
-            name = tableAttrName;
-        }
-        else
-        {
-            name = type.Name + "s";
-            if (type.IsInterface && name.StartsWith("I"))
-                name = name.Substring(1);
+            return tableAttrName;
         }
 
+        var name = type.Name + "s";
+        if (type.IsInterface && name.StartsWith("I"))
+            name = name.Substring(1);
+
         return name;
+    }
+
+    private static string? ResolveForeignTableAttributeName(Type type)
+    {
+        foreach (var attribute in type.GetCustomAttributes(false))
+        {
+            if (attribute.GetType().Name != "TableAttribute") continue;
+
+            return attribute.GetType().GetProperty("Name")?.GetValue(attribute) as string;
+        }
+
+        return null;
     }
 
     public static bool IsWriteable(PropertyInfo property)
@@ -66,9 +77,24 @@ public class DapperHelper
         // Orden de resolución (ver docs/adr/0002): los atributos explícitos ganan
         // siempre a la convención, y el "Id" exacto se evalúa antes que el resto
         // para no alterar el comportamiento de las entidades que ya funcionaban.
-        var key = properties.FirstOrDefault(p =>
-            p.GetCustomAttribute<ExplicitKeyAttribute>(false) != null
-            || p.GetCustomAttribute<KeyAttribute>(false) != null);
+        var explicitKeys = properties
+            .Where(p => p.GetCustomAttribute<ExplicitKeyAttribute>(false) != null
+                        || p.GetCustomAttribute<KeyAttribute>(false) != null)
+            .Take(2)
+            .ToList();
+
+        // Las claves compuestas no están soportadas: el WHERE asume una sola
+        // columna. Antes se elegía la primera y la otra terminaba en el SET, lo
+        // que actualizaba filas de más sin avisar.
+        if (explicitKeys.Count > 1)
+        {
+            throw new NotSupportedException(
+                $"La entidad '{type.Name}' tiene más de una clave primaria " +
+                $"({string.Join(", ", explicitKeys.Select(p => p.Name))}). " +
+                "Las claves compuestas no están soportadas.");
+        }
+
+        var key = explicitKeys.FirstOrDefault();
         if (key != null) return key;
 
         key = properties.FirstOrDefault(p => p.Name == "Id");
@@ -90,16 +116,12 @@ public class DapperHelper
             $"[Key] o [ExplicitKey], una llamada 'Id' y una llamada '{expectedName}'.");
     }
 
-    /// <summary>
-    /// Fuerza un dialecto concreto. Si queda en <c>null</c> -lo normal- el dialecto se
-    /// detecta a partir del tipo de conexión. Útil para proveedores que envuelven la
-    /// conexión real y por tanto no se reconocen por su nombre de tipo.
-    /// </summary>
-    public static ISqlDialect? Dialect { get; set; }
-
     public static ISqlDialect GetDialect(IDbConnection connection)
     {
-        if (Dialect != null) return Dialect;
+        // SqlDialects.Forced permite forzar un dialecto concreto cuando el proveedor
+        // envuelve la conexión real y por eso no se reconoce por su nombre de tipo.
+        var forced = SqlDialects.Forced;
+        if (forced != null) return forced;
         if (connection == null) return SqlDialects.None;
 
         // Mismo criterio que Dapper.Contrib para elegir su ISqlAdapter: el nombre del
@@ -121,8 +143,16 @@ public class DapperHelper
 
     public static (string Sql, DynamicParameters Parameters) ToSql<T>(Expression<Func<T, bool>> predicate, ISqlDialect dialect)
     {
-        var visitor = new SqlExpressionVisitor(dialect);
-        visitor.Visit(predicate);
+        if (predicate is null) throw new ArgumentNullException(nameof(predicate));
+        if (predicate.Parameters.Count != 1)
+        {
+            throw new ArgumentException(
+                "El predicado debe tener exactamente un parámetro (por ejemplo, u => u.Id == 1).",
+                nameof(predicate));
+        }
+
+        var visitor = new SqlExpressionVisitor(dialect, predicate.Parameters[0]);
+        visitor.VisitPredicate(predicate);
 
         return (visitor.Sql, visitor.Parameters);
     }

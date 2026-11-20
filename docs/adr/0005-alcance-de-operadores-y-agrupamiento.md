@@ -71,3 +71,37 @@ reimplementar el traductor de EF Core.
   visitor no trata de forma especial. No es una regresión -antes tampoco eran
   usables en comparaciones, porque solo existía `==`- pero queda como límite
   conocido.
+
+## Ampliación: null, NOT y validación estructural (2026-11-19)
+
+Una pasada de saneamiento previa a agregar funcionalidad corrigió tres casos en los
+que el visitor generaba SQL válido pero semánticamente incorrecto:
+
+- `== null` / `!= null` ahora producen `IS NULL` / `IS NOT NULL`. Antes se
+  parametrizaba `null` (`= @param`), que en SQL nunca es verdadero.
+- `!expr` ahora produce `NOT (...)`. Antes el nodo `Not` se ignoraba y se emitía el
+  operando sin negar.
+- Un `bool` suelto (`u => u.Activo`) se traduce a `Activo = @param` con `true`, en
+  lugar de `WHERE Activo`, que es inválido en SQL Server.
+
+Además, el visitor valida la estructura en vez de asumirla:
+
+- El lado izquierdo de una comparación debe ser una propiedad simple de la entidad.
+  `"x" == e.Name`, `e.Name == e.Key` (columna-columna), `e.Role.Name` y
+  `e.Name.Length` lanzan `NotSupportedException`.
+- El argumento de `Contains` debe ser un valor, no una columna, y el receptor debe
+  ser una columna.
+- Un `bool` capturado por el closure se evalúa a `1 = 1` / `1 = 0`.
+
+`VisitPredicate` pasa a ser el punto de entrada y `VisitBinary` deja de ser el
+despachador. La regla de paréntesis mínimos no cambió, y `Nullable<T>` en
+comparaciones con null queda cubierto por el primer punto.
+
+### Ampliación: evaluación del lado derecho y escapado de `LIKE`
+
+- El lado derecho se evalúa con `Expression.Lambda<Func<object?>>(...).Compile()`,
+  así que admite métodos y aritmética (`x.Fecha > DateTime.Now.AddDays(-1)`,
+  `x.Id == baseId + 1`). Sigue rechazándose si referencia la entidad, porque eso
+  sería una comparación columna-columna.
+- `Contains` escapa `!`, `%` y `_`, y agrega `ESCAPE '!'` para que esos caracteres
+  se busquen literalmente. Ver [ADR 0009](0009-renombre-a-exists-cancelacion-y-rhs.md).

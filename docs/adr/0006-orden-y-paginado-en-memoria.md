@@ -1,6 +1,6 @@
 # ADR 0006 — Orden y paginado genéricos, resueltos en memoria
 
-- **Estado:** Aceptado
+- **Estado:** Reemplazado por [ADR 0008](0008-eliminar-paginado-en-memoria.md)
 - **Fecha:** 2026-08-01
 - **Afecta a:** `PagingExtensions` (nuevo)
 - **Relacionado:** [ADR 0005](0005-alcance-de-operadores-y-agrupamiento.md)

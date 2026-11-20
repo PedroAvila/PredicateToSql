@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # El repositorio tiene un .sln y un .csproj en la raíz: hay que nombrar el
+      # target explícitamente o MSBuild falla con MSB1011.
+      - name: Compilar
+        run: dotnet build PAN.DapperLambdaToSql.csproj -c Release
+
+      - name: Ejecutar tests
+        run: dotnet test tests/PAN.DapperLambdaToSql.Tests/PAN.DapperLambdaToSql.Tests.csproj -c Release
