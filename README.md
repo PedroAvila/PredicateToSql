@@ -9,8 +9,8 @@
 - ✅ Actualización de entidades genéricas con `UpdateAsync`
 - ✅ Verificación de existencia con `ExistsAsync`
 - ✅ Consulta de filas que cumplen un predicado con `QueryAsync`
-- ✅ Predicados con `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `!`, `Contains` (`LIKE`) y agrupamiento con paréntesis
-- ✅ Cancelación opcional con `CancellationToken` en los tres métodos
+- ✅ Predicados con `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `!`, `Contains`/`StartsWith`/`EndsWith` (`LIKE`) y agrupamiento con paréntesis
+- ✅ Cancelación opcional con `CancellationToken` y transacciones opcionales con `IDbTransaction` en los tres métodos
 - ✅ Compatible con `Dapper` y `Dapper.Contrib`: respeta `[Table]`, `[Key]`, `[ExplicitKey]`, `[Write(false)]` y `[Computed]`
 - ✅ Varias convenciones de clave primaria: `Id`, `ID` y `Clase+Id`
 - ✅ Funciona con **SQL Server** y **MySQL / MariaDB**, delimitando los identificadores según el motor
@@ -216,13 +216,27 @@ Ejemplo:
 IEnumerable<User> usuarios = await _context.QueryAsync<User>(u => u.RoleId == 2 && u.Name.Contains("Pedro"));
 ```
 
-### ⏱️ Cancelación
+### ⏱️ Cancelación y transacciones
 
-`UpdateAsync`, `ExistsAsync` y `QueryAsync` aceptan un `CancellationToken` opcional que se propaga a Dapper:
+`UpdateAsync`, `ExistsAsync` y `QueryAsync` aceptan un `CancellationToken` opcional y un `IDbTransaction` opcional; ambos se pasan directamente a Dapper:
 
 ```csharp
 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 IEnumerable<User> usuarios = await _context.QueryAsync<User>(u => u.RoleId == 2, cts.Token);
+```
+
+```csharp
+using var tx = _dbConnection.BeginTransaction();
+try
+{
+    await _dbConnection.UpdateAsync(gym, cancellationToken: cts.Token, transaction: tx);
+    tx.Commit();
+}
+catch
+{
+    tx.Rollback();
+    throw;
+}
 ```
 
 ### 🔎 Operadores soportados en los predicados
@@ -240,6 +254,8 @@ Tanto `ExistsAsync` como `QueryAsync` reciben un `Expression<Func<T, bool>>` y l
 | `!expr` | `NOT (...)` |
 | `x.Prop` (si `Prop` es `bool`) | `Prop = @param` (`true`) |
 | `x.Prop.Contains("valor")` | `LIKE '%valor%' ESCAPE '!'` |
+| `x.Prop.StartsWith("valor")` | `LIKE 'valor%' ESCAPE '!'` |
+| `x.Prop.EndsWith("valor")` | `LIKE '%valor' ESCAPE '!'` |
 
 El lado derecho de una comparación se evalúa como valor: admite constantes, variables capturadas, métodos y aritmética (`x.Fecha > DateTime.Now.AddDays(-1)`, `x.Id == baseId + 1`). Si referencia la entidad (`x.Name == x.Key`) lanza `NotSupportedException`.
 
@@ -250,7 +266,7 @@ await _context.QueryAsync<User>(u => u.Name == "Pedro" && (u.RoleId == 2 || u.Ro
 // WHERE Name = @param0 AND (RoleId = @param1 OR RoleId = @param2)
 ```
 
-> `Contains` escapa `%`, `_` y el propio carácter de escape `!` antes de parametrizar, y agrega `ESCAPE '!'`, así que esos caracteres se buscan literalmente en vez de funcionar como comodines. Cualquier otro método (`StartsWith`, `Contains` sobre una lista, etc.) lanza `NotSupportedException`.
+> `Contains`, `StartsWith` y `EndsWith` escapan `%`, `_` y el propio carácter de escape `!` antes de parametrizar, y agregan `ESCAPE '!'`, así que esos caracteres se buscan literalmente en vez de funcionar como comodines. Cualquier otro método (`IndexOf`, `Contains` sobre una lista, etc.) lanza `NotSupportedException`.
 
 > ⚠️ El lado izquierdo de una comparación debe ser una propiedad simple de la entidad. Se lanza `NotSupportedException` en vez de generar SQL inválido cuando usás un valor invertido (`"Pedro" == x.Name`), una comparación columna-columna (`x.Name == x.Key`), una ruta anidada (`x.Role.Name`) o una propiedad calculada en el cliente (`x.Name.Length`).
 

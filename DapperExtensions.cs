@@ -8,11 +8,23 @@ namespace PAN.DapperLambdaToSql;
 
 public static class DapperExtensions
 {
+    /// <summary>
+    /// Actualiza las propiedades no nulas de la entidad cuya clave primaria coincida.
+    /// Devuelve <c>false</c> si no se afectó ninguna fila o no hay columnas que actualizar.
+    /// </summary>
+    /// <param name="cancellationToken">Token para cancelar la operación.</param>
+    /// <param name="transaction">Transacción opcional que Dapper usa al ejecutar el comando.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="connection"/> o <paramref name="entity"/> es <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">La clave primaria no tiene valor.</exception>
+    /// <exception cref="InvalidOperationException">No se pudo resolver la clave primaria.</exception>
+    /// <exception cref="NotSupportedException">La entidad tiene más de una clave marcada con atributos.</exception>
     public static async Task<bool> UpdateAsync<T>(
         this IDbConnection connection,
         T entity,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IDbTransaction? transaction = null)
     {
+        if (connection is null) throw new ArgumentNullException(nameof(connection));
         if (entity is null) throw new ArgumentNullException(nameof(entity));
 
         Type entityType = typeof(T);
@@ -69,7 +81,8 @@ public static class DapperExtensions
 
             // Ejecutar la consulta SQL utilizando Dapper
             var affectedRows = await connection
-                .ExecuteAsync(new CommandDefinition(query, parameters, cancellationToken: cancellationToken))
+                .ExecuteAsync(new CommandDefinition(
+                    query, parameters, transaction, cancellationToken: cancellationToken))
                 .ConfigureAwait(false);
 
             // Retornar true si se afectaron filas, false si no
@@ -82,11 +95,21 @@ public static class DapperExtensions
         }
     }
 
+    /// <summary>
+    /// Indica si existe al menos una fila que cumple el predicado, usando
+    /// EXISTS(SELECT 1 ...) en lugar de contar todas las coincidencias.
+    /// </summary>
+    /// <param name="cancellationToken">Token para cancelar la operación.</param>
+    /// <param name="transaction">Transacción opcional que Dapper usa al ejecutar el comando.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="connection"/> o <paramref name="predicate"/> es <c>null</c>.</exception>
+    /// <exception cref="NotSupportedException">El predicado contiene una expresión no soportada.</exception>
     public static async Task<bool> ExistsAsync<T>(
         this IDbConnection connection,
         Expression<Func<T, bool>> predicate,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IDbTransaction? transaction = null)
     {
+        if (connection is null) throw new ArgumentNullException(nameof(connection));
         if (predicate is null) throw new ArgumentNullException(nameof(predicate));
 
         Type entityType = typeof(T);
@@ -106,17 +129,26 @@ public static class DapperExtensions
         // Ejecutar la consulta SQL utilizando Dapper y obtener el indicador
         var exists = await connection
             .QueryFirstOrDefaultAsync<int>(new CommandDefinition(
-                query, whereClause.Parameters, cancellationToken: cancellationToken))
+                query, whereClause.Parameters, transaction, cancellationToken: cancellationToken))
             .ConfigureAwait(false);
 
         return exists > 0;
     }
 
+    /// <summary>
+    /// Devuelve las filas que cumplen el predicado, al estilo de un Where() de EF.
+    /// </summary>
+    /// <param name="cancellationToken">Token para cancelar la operación.</param>
+    /// <param name="transaction">Transacción opcional que Dapper usa al ejecutar el comando.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="connection"/> o <paramref name="predicate"/> es <c>null</c>.</exception>
+    /// <exception cref="NotSupportedException">El predicado contiene una expresión no soportada.</exception>
     public static async Task<IEnumerable<T>> QueryAsync<T>(
         this IDbConnection connection,
         Expression<Func<T, bool>> predicate,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IDbTransaction? transaction = null)
     {
+        if (connection is null) throw new ArgumentNullException(nameof(connection));
         if (predicate is null) throw new ArgumentNullException(nameof(predicate));
 
         Type entityType = typeof(T);
@@ -133,7 +165,7 @@ public static class DapperExtensions
         // Ejecutar la consulta SQL utilizando Dapper y devolver las filas encontradas
         return await connection
             .QueryAsync<T>(new CommandDefinition(
-                query, whereClause.Parameters, cancellationToken: cancellationToken))
+                query, whereClause.Parameters, transaction, cancellationToken: cancellationToken))
             .ConfigureAwait(false);
     }
 }

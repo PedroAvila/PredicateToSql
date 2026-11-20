@@ -105,3 +105,6 @@ comparaciones con null queda cubierto por el primer punto.
   sería una comparación columna-columna.
 - `Contains` escapa `!`, `%` y `_`, y agrega `ESCAPE '!'` para que esos caracteres
   se busquen literalmente. Ver [ADR 0009](0009-renombre-a-exists-cancelacion-y-rhs.md).
+- `StartsWith` y `EndsWith` usan el mismo mecanismo: `LIKE 'valor%'` y
+  `LIKE '%valor'` respectivamente. Ver
+  [ADR 0011](0011-transacciones-prefijo-sufijo-y-guardias.md).

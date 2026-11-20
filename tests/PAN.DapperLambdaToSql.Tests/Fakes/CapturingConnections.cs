@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 
 namespace PAN.DapperLambdaToSql.Tests.Fakes;
 
@@ -8,17 +9,28 @@ namespace PAN.DapperLambdaToSql.Tests.Fakes;
 /// Se lanza en cuanto el comando va a ejecutarse, ya con el <c>CommandText</c> definitivo.
 /// Evita tener que simular un <see cref="DbDataReader"/> completo solo para leer el SQL.
 /// </summary>
-public class SqlCapturedException(string sql, CancellationToken? cancellationToken = null) : Exception("SQL capturado")
+public class SqlCapturedException(
+    string sql,
+    CancellationToken? cancellationToken = null,
+    DbTransaction? transaction = null) : Exception("SQL capturado")
 {
     public string Sql { get; } = sql;
     public CancellationToken? CancellationToken { get; } = cancellationToken;
+    public DbTransaction? Transaction { get; } = transaction;
 }
 
 public abstract class CapturingConnection : DbConnection
 {
     private ConnectionState _state = ConnectionState.Closed;
+    private string _connectionString = string.Empty;
 
-    public override string ConnectionString { get; set; } = string.Empty;
+    // La base usa [AllowNull]: el getter no devuelve null, pero el setter lo acepta.
+    [AllowNull]
+    public override string ConnectionString
+    {
+        get => _connectionString;
+        set => _connectionString = value ?? string.Empty;
+    }
     public override string Database => "test";
     public override string DataSource => "test";
     public override string ServerVersion => "0.0";
@@ -39,9 +51,26 @@ public sealed class SqlConnection : CapturingConnection;
 public sealed class MySqlConnection : CapturingConnection;
 public sealed class NpgsqlConnection : CapturingConnection;
 
+/// <summary>Transacción mínima para verificar que Dapper recibe la que se le pasó.</summary>
+public sealed class CapturingTransaction : DbTransaction
+{
+    public override IsolationLevel IsolationLevel => IsolationLevel.Unspecified;
+    protected override DbConnection DbConnection => throw new NotSupportedException();
+
+    public override void Commit() { }
+    public override void Rollback() { }
+}
+
 public sealed class CapturingCommand : DbCommand
 {
-    public override string CommandText { get; set; } = string.Empty;
+    private string _commandText = string.Empty;
+
+    [AllowNull]
+    public override string CommandText
+    {
+        get => _commandText;
+        set => _commandText = value ?? string.Empty;
+    }
     public override int CommandTimeout { get; set; }
     public override CommandType CommandType { get; set; }
     public override UpdateRowSource UpdatedRowSource { get; set; }
@@ -55,31 +84,48 @@ public sealed class CapturingCommand : DbCommand
     public override void Prepare() { }
     protected override DbParameter CreateDbParameter() => new CapturingParameter();
 
-    public override int ExecuteNonQuery() => throw new SqlCapturedException(CommandText);
-    public override object? ExecuteScalar() => throw new SqlCapturedException(CommandText);
-    protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new SqlCapturedException(CommandText);
+    private SqlCapturedException Captured() => new(CommandText, null, DbTransaction);
 
-    // Los overloads async conservan el token para que los tests verifiquen que la
-    // librería lo propaga hasta Dapper.
+    private SqlCapturedException Captured(CancellationToken token) => new(CommandText, token, DbTransaction);
+
+    public override int ExecuteNonQuery() => throw Captured();
+    public override object? ExecuteScalar() => throw Captured();
+    protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw Captured();
+
+    // Los overloads async conservan el token y la transacción para que los tests
+    // verifiquen que la librería los propaga hasta Dapper.
     public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
-        => throw new SqlCapturedException(CommandText, cancellationToken);
+        => throw Captured(cancellationToken);
 
     public override Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken)
-        => throw new SqlCapturedException(CommandText, cancellationToken);
+        => throw Captured(cancellationToken);
 
     protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
         CommandBehavior behavior, CancellationToken cancellationToken)
-        => throw new SqlCapturedException(CommandText, cancellationToken);
+        => throw Captured(cancellationToken);
 }
 
 public sealed class CapturingParameter : DbParameter
 {
+    private string _parameterName = string.Empty;
+    private string _sourceColumn = string.Empty;
+
     public override DbType DbType { get; set; }
     public override ParameterDirection Direction { get; set; }
     public override bool IsNullable { get; set; }
-    public override string ParameterName { get; set; } = string.Empty;
+    [AllowNull]
+    public override string ParameterName
+    {
+        get => _parameterName;
+        set => _parameterName = value ?? string.Empty;
+    }
     public override int Size { get; set; }
-    public override string SourceColumn { get; set; } = string.Empty;
+    [AllowNull]
+    public override string SourceColumn
+    {
+        get => _sourceColumn;
+        set => _sourceColumn = value ?? string.Empty;
+    }
     public override bool SourceColumnNullMapping { get; set; }
     public override object? Value { get; set; }
     public override void ResetDbType() { }

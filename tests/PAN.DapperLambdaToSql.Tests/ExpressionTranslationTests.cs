@@ -149,9 +149,35 @@ public class ExpressionTranslationTests
     }
 
     [Fact]
-    public void ToSql_WhenMethodCallIsNotContains_ShouldThrowNotSupported()
+    public void ToSql_WhenUsingStartsWith_ShouldTranslateToLikeWithTrailingWildcard()
     {
-        Assert.Throws<NotSupportedException>(() => DapperHelper.ToSql<User>(u => u.Name!.StartsWith("Pedro")));
+        var (sql, parameters) = DapperHelper.ToSql<User>(u => u.Name!.StartsWith("Ped"));
+
+        Assert.Equal("Name LIKE @param0 ESCAPE '!'", sql);
+        Assert.Equal("Ped%", parameters.Get<string>("@param0"));
+    }
+
+    [Fact]
+    public void ToSql_WhenUsingEndsWith_ShouldTranslateToLikeWithLeadingWildcard()
+    {
+        var (sql, parameters) = DapperHelper.ToSql<User>(u => u.Name!.EndsWith("rez"));
+
+        Assert.Equal("Name LIKE @param0 ESCAPE '!'", sql);
+        Assert.Equal("%rez", parameters.Get<string>("@param0"));
+    }
+
+    [Fact]
+    public void ToSql_WhenStartsWithValueHasWildcards_ShouldEscapeThem()
+    {
+        var (_, parameters) = DapperHelper.ToSql<User>(u => u.Name!.StartsWith("100%_!"));
+
+        Assert.Equal("100!%!_!!%", parameters.Get<string>("@param0"));
+    }
+
+    [Fact]
+    public void ToSql_WhenMethodCallIsNotSupported_ShouldThrowNotSupported()
+    {
+        Assert.Throws<NotSupportedException>(() => DapperHelper.ToSql<User>(_ => string.Equals("a", "b")));
     }
 
     [Fact]
@@ -266,5 +292,14 @@ public class ExpressionTranslationTests
     public void ToSql_WhenPredicateIsNull_ShouldThrowArgumentNull()
     {
         Assert.Throws<ArgumentNullException>(() => DapperHelper.ToSql<User>(null!));
+    }
+
+    [Fact]
+    public void ToSql_WhenRightOperandIsALiteral_ShouldUseItWithoutCompiling()
+    {
+        var (sql, parameters) = DapperHelper.ToSql<User>(u => u.Name == "Pedro");
+
+        Assert.Equal("Name = @param0", sql);
+        Assert.Equal("Pedro", parameters.Get<string>("@param0"));
     }
 }

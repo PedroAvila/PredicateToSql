@@ -60,7 +60,7 @@ internal sealed class SqlExpressionVisitor
                 return;
 
             case MethodCallExpression call:
-                VisitContains(call);
+                VisitLikeMethod(call);
                 return;
 
             case MemberExpression member when member.Type == typeof(bool):
@@ -180,13 +180,13 @@ internal sealed class SqlExpressionVisitor
             "No están soportadas las rutas anidadas.");
     }
 
-    private void VisitContains(MethodCallExpression node)
+    private void VisitLikeMethod(MethodCallExpression node)
     {
-        if (!IsStringContains(node))
+        if (!IsStringLikeMethod(node))
         {
             throw new NotSupportedException(
                 $"El método '{node.Method.DeclaringType?.Name}.{node.Method.Name}' no está soportado. " +
-                "Solo string.Contains(...) se traduce a LIKE.");
+                "Solo string.Contains(...), StartsWith(...) y EndsWith(...) se traducen a LIKE.");
         }
 
         // El receptor debe ser una columna: "abc".Contains(...) no es SQL válido.
@@ -195,7 +195,7 @@ internal sealed class SqlExpressionVisitor
         _sql.Append(" LIKE ");
 
         var rawValue = ResolveValue(node.Arguments[0]);
-        AddParameter(rawValue is null ? null : ToLikePattern(rawValue));
+        AddParameter(rawValue is null ? null : ToLikePattern(rawValue, node.Method.Name));
 
         // '!' como carácter de escape es válido tal cual en SQL Server y MySQL, y
         // evita que %/_ del valor se interpreten como comodines.
@@ -203,11 +203,12 @@ internal sealed class SqlExpressionVisitor
     }
 
     /// <summary>
-    /// Escapa los comodines de LIKE y envuelve el valor en <c>%...%</c>. El carácter
+    /// Escapa los comodines de LIKE y coloca el comodín según el método: a ambos lados
+    /// para Contains, al final para StartsWith y al principio para EndsWith. El carácter
     /// de escape es <c>!</c> para no depender del backslash -que MySQL trata distinto
     /// según el modo-.
     /// </summary>
-    private static string ToLikePattern(object value)
+    private static string ToLikePattern(object value, string methodName)
     {
         var text = value.ToString() ?? string.Empty;
 
@@ -216,7 +217,12 @@ internal sealed class SqlExpressionVisitor
             .Replace("%", "!%")
             .Replace("_", "!_");
 
-        return $"%{escaped}%";
+        return methodName switch
+        {
+            nameof(string.StartsWith) => $"{escaped}%",
+            nameof(string.EndsWith) => $"%{escaped}",
+            _ => $"%{escaped}%",
+        };
     }
 
     private void VisitColumn(Expression expression)
@@ -256,6 +262,10 @@ internal sealed class SqlExpressionVisitor
                 "(constante, variable capturada o una expresión que no dependa de la entidad).");
         }
 
+        // Las constantes literales -u.Name == "Pedro"- son el caso más común y no
+        // necesitan compilar nada: se devuelve el valor directamente.
+        if (expression is ConstantExpression constant) return constant.Value;
+
         // Compilación tipada (evita DynamicInvoke). El árbol puede traer métodos,
         // aritmética y propiedades: se evalúa entero como cualquier expresión C#.
         var value = Expression.Lambda<Func<object?>>(
@@ -278,11 +288,13 @@ internal sealed class SqlExpressionVisitor
         _sql.Append(parameterName);
     }
 
-    private static bool IsStringContains(MethodCallExpression node)
+    private static bool IsStringLikeMethod(MethodCallExpression node)
         => node.Method.DeclaringType == typeof(string)
-           && node.Method.Name == nameof(string.Contains)
+           && node.Method.Name is nameof(string.Contains) or nameof(string.StartsWith) or nameof(string.EndsWith)
            && node.Object != null
-           && node.Arguments.Count == 1;
+           && node.Arguments.Count == 1
+           && node.Arguments[0].Type == typeof(string)
+           && node.Method.ReturnType == typeof(bool);
 
     private sealed class ParameterFinder(ParameterExpression parameter) : ExpressionVisitor
     {

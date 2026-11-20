@@ -41,6 +41,10 @@
 - El lado derecho de una comparacion admite metodos y aritmetica (DateTime.Now.AddDays(-1),
   baseId + 1); si referencia la entidad se rechaza con NotSupportedException.
 - Contains escapa %, _ y el caracter de escape, y agrega ESCAPE '!'.
+- Los tres metodos aceptan un IDbTransaction opcional que se pasa a Dapper; la libreria
+  no abre ni cierra transacciones.
+- StartsWith y EndsWith se traducen a LIKE con comodin al final/al principio.
+- Se valida que la conexion no sea null con ArgumentNullException.
 
 1.3.0
 - Nuevo OrderByProperties/ToPagedResult(params (string, bool)[] sortKeys): orden con desempate
