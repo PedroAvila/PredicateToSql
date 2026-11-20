@@ -19,7 +19,7 @@ jobs:
       # El repositorio tiene un .sln y un .csproj en la raíz: hay que nombrar el
       # target explícitamente o MSBuild falla con MSB1011.
       - name: Compilar
-        run: dotnet build PAN.DapperLambdaToSql.csproj -c Release
+        run: dotnet build PAN.PredicateToSql.csproj -c Release
 
       - name: Ejecutar tests
-        run: dotnet test tests/PAN.DapperLambdaToSql.Tests/PAN.DapperLambdaToSql.Tests.csproj -c Release
+        run: dotnet test tests/PAN.PredicateToSql.Tests/PAN.PredicateToSql.Tests.csproj -c Release

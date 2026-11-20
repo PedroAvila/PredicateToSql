@@ -2,13 +2,13 @@
 
 - **Estado:** Aceptado
 - **Fecha:** 2026-08-01
-- **Afecta a:** proceso de release, [README.md](../../README.md), [PAN.DapperLambdaToSql.csproj](../../PAN.DapperLambdaToSql.csproj)
+- **Afecta a:** proceso de release, [README.md](../../README.md), [PAN.PredicateToSql.csproj](../../PAN.PredicateToSql.csproj)
 - **Relacionado:** [ADR 0006](0006-orden-y-paginado-en-memoria.md)
 
 ## Contexto
 
 `GeneratePackageOnBuild=True` hace que cualquier build en `Release` regenere
-`bin/Release/PAN.DapperLambdaSQL.<version>.nupkg` con el `<Version>` que haya
+`bin/Release/PAN.PredicateToSql.<version>.nupkg` con el `<Version>` que haya
 en el `.csproj` en ese momento (ver la sección "Commands" de `CLAUDE.md`). El
 `.nupkg` empaqueta el `README.md` del repo (`PackageReadmeFile` +
 `<None Include="README.md" Pack="true" .../>`), así que ese archivo es lo que

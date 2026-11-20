@@ -1,6 +1,8 @@
-# PAN.DapperLambdaToSql
+# PAN.PredicateToSql
 
-**PAN.DapperLambdaToSql** es una librería ligera que extiende Dapper y Dapper.Contrib, permitiendo realizar operaciones genéricas como `UPDATE`, verificar existencia y consultar filas usando expresiones lambda (`Expression<Func<T, bool>>`), al estilo de Entity Framework.
+[![Licencia MIT](https://img.shields.io/badge/Licencia-MIT-green.svg)](https://github.com/PedroAvila/DapperQueryExpressions/blob/main/LICENSE)
+
+**PAN.PredicateToSql** es una librería ligera que extiende Dapper y Dapper.Contrib, permitiendo realizar operaciones genéricas como `UPDATE`, verificar existencia y consultar filas usando expresiones lambda (`Expression<Func<T, bool>>`), al estilo de Entity Framework.
 > ⚠️ **Importante:** Esta librería está diseñada para usarse **exclusivamente** con **Dapper** y **Dapper.Contrib**.
 > **Nota:** Esta librería no es compatible con Entity Framework ni con Entity Framework Core. Está enfocada en simplificar el uso de Dapper para operaciones comunes sin necesidad de escribir SQL manualmente.
 
@@ -19,8 +21,14 @@
 ## 💡 Instalación
 
 ```
-dotnet add package PAN.DapperLambdaSQL
+dotnet add package PAN.PredicateToSql
 ```
+
+> 🔁 **Migrando desde `PAN.DapperLambdaSQL`:** el paquete, el assembly y el namespace ahora son `PAN.PredicateToSql`. Actualizá el comando de instalación y reemplazá `using PAN.DapperLambdaToSql;` por `using PAN.PredicateToSql;`. Las firmas de los métodos no cambian por este renombre:
+>
+> ```csharp
+> using PAN.PredicateToSql;
+> ```
 
 
 # 🚀 Uso
@@ -272,7 +280,12 @@ await _context.QueryAsync<User>(u => u.Name == "Pedro" && (u.RoleId == 2 || u.Ro
 
 ## 📄 Licencia
 
-MIT — ver [LICENSE](LICENSE).
+**PAN.PredicateToSql se distribuye bajo la licencia MIT** (Copyright © 2026 Pedro Ávila Núñez). Es una licencia permisiva y reconocida: podés usar la librería en proyectos personales y comerciales, copiarla, modificarla, distribuirla y venderla, con la única condición de conservar el aviso de copyright y el texto de la licencia. Se entrega **tal cual**, sin garantías.
+
+La licencia está declarada en los metadatos del paquete —en nuget.org verás la etiqueta *MIT License*— y el texto completo viaja dentro del `.nupkg` en el archivo `LICENSE`.
+
+- Texto completo: [LICENSE](https://github.com/PedroAvila/DapperQueryExpressions/blob/main/LICENSE)
+- Registro oficial de la licencia: [opensource.org/licenses/MIT](https://opensource.org/licenses/MIT)
 
 
 

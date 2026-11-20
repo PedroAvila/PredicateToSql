@@ -1,6 +1,6 @@
 using Dapper.Contrib.Extensions;
 
-namespace PAN.DapperLambdaToSql.Tests;
+namespace PAN.PredicateToSql.Tests;
 
 /// <summary>
 /// Espeja la entidad Role de un dominio real: tiene una columna llamada <c>Key</c>,

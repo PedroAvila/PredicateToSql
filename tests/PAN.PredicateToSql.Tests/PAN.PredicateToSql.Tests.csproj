@@ -28,7 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\PAN.DapperLambdaToSql.csproj" />
+    <ProjectReference Include="..\..\PAN.PredicateToSql.csproj" />
   </ItemGroup>
 
   <ItemGroup>

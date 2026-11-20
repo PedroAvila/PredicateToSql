@@ -3,11 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36310.24
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PAN.DapperLambdaToSql", "PAN.DapperLambdaToSql.csproj", "{10F328D6-ECED-4077-92C5-FCBE75053D2C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PAN.PredicateToSql", "PAN.PredicateToSql.csproj", "{10F328D6-ECED-4077-92C5-FCBE75053D2C}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PAN.DapperLambdaToSql.Tests", "tests\PAN.DapperLambdaToSql.Tests\PAN.DapperLambdaToSql.Tests.csproj", "{90343929-4097-4C50-BD71-19C445BEF40E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PAN.PredicateToSql.Tests", "tests\PAN.PredicateToSql.Tests\PAN.PredicateToSql.Tests.csproj", "{90343929-4097-4C50-BD71-19C445BEF40E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

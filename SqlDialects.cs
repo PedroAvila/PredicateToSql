@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace PAN.DapperLambdaToSql;
+namespace PAN.PredicateToSql;
 
 /// <summary>
 /// Delimita identificadores -tablas y columnas- según las reglas del motor.

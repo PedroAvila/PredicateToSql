@@ -11,7 +11,7 @@
 
 ## Contexto
 
-`PAN.DapperLambdaToSql` es, por diseño, una capa delgada sobre **Dapper** y
+`PAN.PredicateToSql` es, por diseño, una capa delgada sobre **Dapper** y
 **Dapper.Contrib**: agrega `UpdateAsync`, `ExistsAsync` y `QueryAsync`, y delega en
 esas librerías la ejecución, el binding de parámetros, el mapeo de resultados y las
 convenciones de atributos (`[Table]`, `[Key]`, `[ExplicitKey]`, `[Write(false)]`,

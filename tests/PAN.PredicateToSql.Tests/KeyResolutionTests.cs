@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace PAN.DapperLambdaToSql.Tests;
+namespace PAN.PredicateToSql.Tests;
 
 public class KeyResolutionTests
 {

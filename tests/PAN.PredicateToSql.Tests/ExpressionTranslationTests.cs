@@ -1,4 +1,4 @@
-namespace PAN.DapperLambdaToSql.Tests;
+namespace PAN.PredicateToSql.Tests;
 
 public class ExpressionTranslationTests
 {

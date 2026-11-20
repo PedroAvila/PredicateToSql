@@ -3,7 +3,7 @@ using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 
-namespace PAN.DapperLambdaToSql.Tests.Fakes;
+namespace PAN.PredicateToSql.Tests.Fakes;
 
 /// <summary>
 /// Se lanza en cuanto el comando va a ejecutarse, ya con el <c>CommandText</c> definitivo.

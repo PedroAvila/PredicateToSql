@@ -1,6 +1,6 @@
-using PAN.DapperLambdaToSql.Tests.Fakes;
+using PAN.PredicateToSql.Tests.Fakes;
 
-namespace PAN.DapperLambdaToSql.Tests;
+namespace PAN.PredicateToSql.Tests;
 
 public class CancellationTests
 {

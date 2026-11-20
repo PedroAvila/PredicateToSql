@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`PAN.DapperLambdaToSql` — a single `netstandard2.0` class library published to NuGet. It adds extension methods to `IDbConnection` (`UpdateAsync`, `ExistsAsync`, `QueryAsync`) that build SQL from entity reflection and lambda expressions, in the style of EF Core, on top of Dapper + Dapper.Contrib.
+`PAN.PredicateToSql` — a single `netstandard2.0` class library published to NuGet. It adds extension methods to `IDbConnection` (`UpdateAsync`, `ExistsAsync`, `QueryAsync`) that build SQL from entity reflection and lambda expressions, in the style of EF Core, on top of Dapper + Dapper.Contrib.
 
-The library itself is four small files; tests live in [tests/PAN.DapperLambdaToSql.Tests/](tests/PAN.DapperLambdaToSql.Tests/). CI runs build + tests on push and pull request ([ci.yml](.github/workflows/ci.yml)).
+The library itself is four small files; tests live in [tests/PAN.PredicateToSql.Tests/](tests/PAN.PredicateToSql.Tests/). CI runs build + tests on push and pull request ([ci.yml](.github/workflows/ci.yml)).
 
 ### Design principle: don't reinvent the wheel
 
@@ -17,18 +17,18 @@ Before adding a feature, check whether Dapper, Dapper.Contrib or the BCL already
 ```powershell
 # The repo root holds both a .sln and a .csproj, so bare `dotnet build` fails
 # with MSB1011 — always name the target explicitly.
-dotnet build PAN.DapperLambdaToSql.csproj
-dotnet build PAN.DapperLambdaToSql.csproj -c Release   # also emits the .nupkg (GeneratePackageOnBuild=True)
-dotnet pack PAN.DapperLambdaToSql.csproj -c Release
+dotnet build PAN.PredicateToSql.csproj
+dotnet build PAN.PredicateToSql.csproj -c Release   # also emits the .nupkg (GeneratePackageOnBuild=True)
+dotnet pack PAN.PredicateToSql.csproj -c Release
 
-dotnet test tests/PAN.DapperLambdaToSql.Tests/PAN.DapperLambdaToSql.Tests.csproj
-dotnet test tests/PAN.DapperLambdaToSql.Tests/PAN.DapperLambdaToSql.Tests.csproj --filter "FullyQualifiedName~UpdateAsyncMySqlTests"
-dotnet test tests/PAN.DapperLambdaToSql.Tests/PAN.DapperLambdaToSql.Tests.csproj --filter "DisplayName~ReservedWord"
+dotnet test tests/PAN.PredicateToSql.Tests/PAN.PredicateToSql.Tests.csproj
+dotnet test tests/PAN.PredicateToSql.Tests/PAN.PredicateToSql.Tests.csproj --filter "FullyQualifiedName~UpdateAsyncMySqlTests"
+dotnet test tests/PAN.PredicateToSql.Tests/PAN.PredicateToSql.Tests.csproj --filter "DisplayName~ReservedWord"
 ```
 
 The library `.csproj` sits at the repo root, so its default `**/*.cs` glob would swallow the test sources — it carries a `<Compile Remove="tests/**" />` that must stay.
 
-Bumping `<Version>` in [PAN.DapperLambdaToSql.csproj](PAN.DapperLambdaToSql.csproj) is the release step — every build regenerates `bin/<config>/PAN.DapperLambdaSQL.<version>.nupkg`.
+Bumping `<Version>` in [PAN.PredicateToSql.csproj](PAN.PredicateToSql.csproj) is the release step — every build regenerates `bin/<config>/PAN.PredicateToSql.<version>.nupkg`.
 
 ## Architecture
 
@@ -67,21 +67,21 @@ Properties marked `[Write(false)]` or `[Computed]` are skipped via `DapperHelper
 
 ## Packaging constraints
 
-The package is MIT-licensed ([LICENSE](LICENSE), `<PackageLicenseExpression>MIT</PackageLicenseExpression>`). `EnableNETAnalyzers`/`AnalysisLevel` are set explicitly because `netstandard2.0` does not turn them on by default.
+The package is MIT-licensed ([LICENSE](LICENSE), `<PackageLicenseExpression>MIT</PackageLicenseExpression>`). The expression makes NuGet show the "MIT License" label automatically; `LICENSE` is also packed via `<None Include="LICENSE" Pack="true" PackagePath="\" />` so the full text ships inside the `.nupkg`, and the package README states the terms explicitly with an absolute link (a relative `LICENSE` link breaks on nuget.org). `EnableNETAnalyzers`/`AnalysisLevel` are set explicitly because `netstandard2.0` does not turn them on by default.
 
 Dapper and Dapper.Contrib are referenced with `<PrivateAssets>all</PrivateAssets>`, so they are **not** flowed to consumers — consuming projects must install both themselves. This is intentional and documented in the README; don't "fix" it by removing `PrivateAssets`.
 
-Note the mismatch: assembly/namespace is `PAN.DapperLambdaToSql` but `<PackageId>` is `PAN.DapperLambdaSQL`.
+Assembly, root namespace, test assembly, solution and `<PackageId>` all use `PAN.PredicateToSql`; keep them in sync if the name changes again. The only remaining `DapperQueryExpressions` strings are the GitHub URLs, which point to the remote repository.
 
 Target is `netstandard2.0` — no `Task`-returning APIs beyond what's in the BCL there, and no C# runtime features requiring newer frameworks, though `LangVersion` is `latest` so modern syntax (file-scoped namespaces, etc.) is fine.
 
 ## Tests
 
-xUnit + NSubstitute, matching the conventions of the consuming project (`Method_WhenCondition_ShouldOutcome`, constructor setup, no AAA comments). No database is involved: [Fakes/CapturingConnections.cs](tests/PAN.DapperLambdaToSql.Tests/Fakes/CapturingConnections.cs) defines `DbConnection` subclasses **named** `SqlConnection` / `MySqlConnection` / `NpgsqlConnection` — the type name is what drives dialect detection, so renaming those classes silently guts the engine coverage. Their command throws `SqlCapturedException` carrying the final `CommandText`, `CancellationToken` and `DbTransaction`, so assertions run against what Dapper was about to send, not a reconstruction (`CancellationTests` / `TransactionTests` cover them).
+xUnit + NSubstitute, matching the conventions of the consuming project (`Method_WhenCondition_ShouldOutcome`, constructor setup, no AAA comments). No database is involved: [Fakes/CapturingConnections.cs](tests/PAN.PredicateToSql.Tests/Fakes/CapturingConnections.cs) defines `DbConnection` subclasses **named** `SqlConnection` / `MySqlConnection` / `NpgsqlConnection` — the type name is what drives dialect detection, so renaming those classes silently guts the engine coverage. Their command throws `SqlCapturedException` carrying the final `CommandText`, `CancellationToken` and `DbTransaction`, so assertions run against what Dapper was about to send, not a reconstruction (`CancellationTests` / `TransactionTests` cover them).
 
 `UpdateAsyncSqlTests` / `ExistsAsyncSqlTests` are abstract: cases are written once and each engine subclass supplies only its delimiter, so MySQL and SQL Server can never drift apart in coverage.
 
-Parallelization is disabled assembly-wide ([AssemblyInfo.cs](tests/PAN.DapperLambdaToSql.Tests/AssemblyInfo.cs)) because `SqlDialects.Forced` is global mutable state.
+Parallelization is disabled assembly-wide ([AssemblyInfo.cs](tests/PAN.PredicateToSql.Tests/AssemblyInfo.cs)) because `SqlDialects.Forced` is global mutable state.
 
 ## Conventions
 

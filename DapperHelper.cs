@@ -5,7 +5,7 @@ using System.Data;
 using System.Linq.Expressions;
 using System.Reflection;
 
-namespace PAN.DapperLambdaToSql;
+namespace PAN.PredicateToSql;
 
 internal static class DapperHelper
 {

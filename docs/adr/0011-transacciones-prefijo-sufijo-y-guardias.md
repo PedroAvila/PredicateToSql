@@ -3,7 +3,7 @@
 - **Estado:** Aceptado
 - **Fecha:** 2026-11-19
 - **Afecta a:** `DapperExtensions`, `SqlExpressionVisitor`, [README.md](../../README.md),
-  [PAN.DapperLambdaToSql.csproj](../../PAN.DapperLambdaToSql.csproj)
+  [PAN.PredicateToSql.csproj](../../PAN.PredicateToSql.csproj)
 - **Relacionado:** [ADR 0005](0005-alcance-de-operadores-y-agrupamiento.md),
   [ADR 0009](0009-renombre-a-exists-cancelacion-y-rhs.md),
   [ADR 0010](0010-no-reinventar-la-rueda.md)

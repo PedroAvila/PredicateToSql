@@ -1,7 +1,7 @@
 using System.Data.Common;
 using System.Linq.Expressions;
 
-namespace PAN.DapperLambdaToSql.Tests.Fakes;
+namespace PAN.PredicateToSql.Tests.Fakes;
 
 /// <summary>
 /// Ejecuta las extensiones contra una conexión simulada y devuelve el SQL que Dapper

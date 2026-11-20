@@ -3,7 +3,7 @@
 - **Estado:** Aceptado
 - **Fecha:** 2026-11-19
 - **Afecta a:** `DapperExtensions` (`QueryPagedAsync`), `PagingExtensions` (eliminado),
-  [README.md](../../README.md), [PAN.DapperLambdaToSql.csproj](../../PAN.DapperLambdaToSql.csproj)
+  [README.md](../../README.md), [PAN.PredicateToSql.csproj](../../PAN.PredicateToSql.csproj)
 - **Reemplaza a:** [ADR 0006](0006-orden-y-paginado-en-memoria.md)
 
 ## Contexto

@@ -2,7 +2,7 @@
 using System.Linq.Expressions;
 using System.Text;
 
-namespace PAN.DapperLambdaToSql;
+namespace PAN.PredicateToSql;
 
 /// <summary>
 /// Traduce un predicado booleano a un fragmento WHERE y sus parámetros. El lado
